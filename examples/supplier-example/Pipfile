@@ -5,6 +5,7 @@ verify_ssl = true
 
 [dev-packages]
 
+# TODO: Workout why this fails.
 [packages]
 integration-adaptors-common = {editable = true, path = "../../common"}
 scr = {editable = true, path = "../SCR"}
@@ -12,7 +13,7 @@ flask = "*"
 requests = "*"
 
 [requires]
-python_version = "3.7"
+python_version = "3.9"
 
 [scripts]
 server = "python runserver.py"

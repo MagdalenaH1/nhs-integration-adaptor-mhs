@@ -4,11 +4,9 @@ import setuptools
 
 setup(
     name='scr',
-    version='',
     packages=setuptools.find_packages(),
-    url='',
-    license='',
-    author='Phillip Woods',
-    author_email='',
+    license='Apache 2.0',
+    author='NIA Development Team',
+    author_email='niasupport@nhs.net',
     description='Artifacts for producing SCR requests.',
 )

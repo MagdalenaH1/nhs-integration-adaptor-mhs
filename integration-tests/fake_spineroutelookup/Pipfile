@@ -9,7 +9,7 @@ verify_ssl = true
 tornado = "*"
 
 [requires]
-python_version = "3.7"
+python_version = "3.9"
 
 [scripts]
 start = "python main.py"

@@ -19,22 +19,46 @@ pipeline {
     }
 
     stages {
-       stage('Build & test Common') {
+        stage('Determine python version') {
+            steps {
+                script {
+                    def python_version = sh(script: "python3 --version", returnStdout: true).trim()
+                    echo "Current Python version: ${python_version}"
+                }
+            }
+        }
+        stage('Prepare and download Python 3.9') {
+            steps {
+                sh 'apt update –fix-missing -y | echo'
+                sh 'apt install -y build-essential libssl-dev libffi-dev zlib1g-dev libbz2-dev wget curl xz-utils'
+                sh 'wget https://www.python.org/ftp/python/3.9.19/Python-3.9.19.tgz'
+                sh 'tar -xvzf Python-3.9.19.tgz'
+            }
+        }
+        stage('Compile and install Python 3.9') {
+            steps {
+                dir('Python-3.9.19') {
+                    sh './configure --enable-optimizations'
+                    sh 'make altinstall'
+                }
+            }
+        }
+        stage('Build & test Common') {
             steps {
                 dir('common') {
                     buildModules('Installing common dependencies')
                     executeUnitTestsWithCoverage()
                 }
             }
-       }
-       stage('Build & test MHS Common') {
+        }
+        stage('Build & test MHS Common') {
             steps {
                 dir('mhs/common') {
                     buildModules('Installing mhs common dependencies')
                     executeUnitTestsWithCoverage()
                 }
             }
-       }
+        }
         stage('Build MHS') {
             parallel {
                 stage('Inbound') {
@@ -132,9 +156,6 @@ pipeline {
             //parallel {
             stages {
                 stage('Run Component Tests (SpineRouteLookup)') {
-                    options {
-                        lock('local-docker-compose-environment')
-                    }
                     stages {
                         stage('Deploy component locally (SpineRouteLookup)') {
                             steps {
@@ -188,9 +209,6 @@ pipeline {
                 }
 
                 stage('Run Component Tests (SDS API)') {
-                    options {
-                        lock('local-docker-compose-environment')
-                    }
                     stages {
                         stage('Deploy component locally (SDS API)') {
                             steps {
@@ -247,6 +265,15 @@ pipeline {
                         lock('exemplar-test-environment')
                     }
                     stages {
+                        stage('Updating Terraform Binary') {
+                            steps {
+                                sh label: 'Updating Terraform Binary', script: """
+                                            wget -O terraform.zip https://releases.hashicorp.com/terraform/0.12.31/terraform_0.12.31_linux_amd64.zip && \
+                                            unzip -o terraform.zip -d /usr/bin/ && \
+                                            rm terraform.zip
+                                """
+                            }
+                        }
                         stage('Deploy MHS (SpineRouteLookup)') {
                             steps {
                                 dir('pipeline/terraform/mhs-environment') {
@@ -341,31 +368,6 @@ pipeline {
                                 }
                             }
                         }
-
-//                         stage('Integration Tests (SpineRouteLookup)') {
-//                             steps {
-//                                 dir('integration-tests/integration_tests') {
-//                                     sh label: 'Installing integration test dependencies', script: 'pipenv install --dev --deploy --ignore-pipfile'
-//                                     // Wait for MHS load balancers to have healthy targets
-//                                     dir('../../pipeline/scripts/check-target-group-health') {
-//                                         sh script: 'pipenv install'
-//
-//                                         timeout(13) {
-//                                             waitUntil {
-//                                                 script {
-//                                                     def r = sh script: 'sleep 10; AWS_DEFAULT_REGION=eu-west-2 pipenv run main ${MHS_OUTBOUND_TARGET_GROUP} ${MHS_INBOUND_TARGET_GROUP}  ${MHS_ROUTE_TARGET_GROUP}', returnStatus: true
-//                                                     return (r == 0);
-//                                                 }
-//                                             }
-//                                         }
-//                                     }
-//                                     sh label: 'Running integration tests', script: """
-//                                         export SKIP_FORWARD_RELIABLE_INT_TEST=true
-//                                         pipenv run inttests
-//                                     """
-//                                 }
-//                             }
-//                         }
                     }
                 }
                 stage('Run Integration Tests (SDS API)') {
@@ -467,32 +469,6 @@ pipeline {
                                 }
                             }
                         }
-
-                        stage('Integration Tests (SDS API)') {
-                            steps {
-                                dir('integration-tests/integration_tests') {
-                                    sh label: 'Installing integration test dependencies', script: 'pipenv install --dev --deploy --ignore-pipfile'
-
-                                    // Wait for MHS load balancers to have healthy targets
-                                    dir('../../pipeline/scripts/check-target-group-health') {
-                                        sh script: 'pipenv install'
-
-                                        timeout(13) {
-                                            waitUntil {
-                                                script {
-                                                    def r = sh script: 'sleep 10; AWS_DEFAULT_REGION=eu-west-2 pipenv run main ${MHS_OUTBOUND_TARGET_GROUP} ${MHS_INBOUND_TARGET_GROUP}  ${MHS_ROUTE_TARGET_GROUP}', returnStatus: true
-                                                    return (r == 0);
-                                                }
-                                            }
-                                        }
-                                    }
-                                    sh label: 'Running integration tests', script: """
-                                        export SKIP_FORWARD_RELIABLE_INT_TEST=true
-                                        pipenv run inttests
-                                    """
-                                }
-                            }
-                        }
                     }
                 }
             } // parallel
@@ -524,8 +500,7 @@ void buildModules(String action) {
 }
 
 int ecrLogin(String aws_region) {
-    String ecrCommand = "aws ecr get-login --region ${aws_region}"
-    String dockerLogin = sh (label: "Getting Docker login from ECR", script: ecrCommand, returnStdout: true).replace("-e none","") // some parameters that AWS provides and docker does not recognize
+    String dockerLogin = "aws ecr get-login-password --region ${aws_region} | docker login -u AWS --password-stdin \"https://\$(aws sts get-caller-identity --query 'Account' --output text).dkr.ecr.${aws_region}.amazonaws.com\""
     return sh(label: "Logging in with Docker", script: dockerLogin, returnStatus: true)
 }
 

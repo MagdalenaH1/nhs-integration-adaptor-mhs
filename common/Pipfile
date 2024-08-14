@@ -13,11 +13,11 @@ python-qpid-proton = "~=0.28"
 pystache = "~=0.6"
 lxml = "~=4.4"
 isodate = "~=0.6"
-aioboto3 = "~=8.0"
+aioboto3 = "~=11.3"
 motor = "~=2.1"
 
 [requires]
-python_version = "3.7"
+python_version = "3.9"
 
 [scripts]
 unittests = 'python -m xmlrunner -o test-reports -v'
